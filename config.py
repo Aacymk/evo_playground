@@ -9,7 +9,7 @@ FPS_TARGET = 60
 # ====================
 # FOOD
 # ====================
-FOOD_COUNT_MAX = 80          # Max food particles at once
+FOOD_COUNT_MAX = 40          # Max food particles at once
 FOOD_RADIUS = 5
 FOOD_COLOR = (50, 220, 80)
 FOOD_ENERGY = 40.0           # Energy gained when eaten
@@ -19,8 +19,8 @@ FOOD_RESPAWN_BATCH = 3       # How many to respawn at once
 # ====================
 # AGENTS
 # ====================
-AGENT_RADIUS = 8
-AGENT_INITIAL_COUNT = 30
+AGENT_RADIUS = 6
+AGENT_INITIAL_COUNT = 45
 AGENT_INITIAL_ENERGY = 80.0
 AGENT_MAX_ENERGY = 150.0
 AGENT_ENERGY_DECAY = 0.05    # Energy lost per frame
