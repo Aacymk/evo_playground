@@ -26,6 +26,9 @@ class Renderer:
         if selected_agent is not None and selected_agent.alive:
             selected_agent.draw_vision_cone(self.surface)
 
+        # Spikes (drawn under food and agents so they feel embedded in world)
+        world.spike_mgr.draw(self.surface)
+
         # Food
         world.food_mgr.draw(self.surface)
 

@@ -1,16 +1,16 @@
 # ====================
 # WORLD
 # ====================
-WORLD_WIDTH = 1200
-WORLD_HEIGHT = 800
+WORLD_WIDTH = 1250
+WORLD_HEIGHT = 700
 BG_COLOR = (10, 10, 15)
 FPS_TARGET = 60
 
 # ====================
 # FOOD
 # ====================
-FOOD_COUNT_MAX = 40          # Max food particles at once
-FOOD_RADIUS = 5
+FOOD_COUNT_MAX = 80          # Max food particles at once
+FOOD_RADIUS = 4
 FOOD_COLOR = (50, 220, 80)
 FOOD_ENERGY = 40.0           # Energy gained when eaten
 FOOD_RESPAWN_INTERVAL = 30   # Frames between respawn attempts
@@ -19,14 +19,15 @@ FOOD_RESPAWN_BATCH = 3       # How many to respawn at once
 # ====================
 # AGENTS
 # ====================
-AGENT_RADIUS = 6
+AGENT_RADIUS = 4
 AGENT_INITIAL_COUNT = 45
 AGENT_INITIAL_ENERGY = 80.0
 AGENT_MAX_ENERGY = 150.0
 AGENT_ENERGY_DECAY = 0.05    # Energy lost per frame
 AGENT_MAX_AGE = 3000         # Frames before natural death
-AGENT_MOVE_SPEED_MAX = 3.5
+AGENT_MOVE_SPEED_MAX = 2.0
 AGENT_TURN_SPEED_MAX = 0.12  # Radians per frame
+AGENT_SPEED_DECAY_COST = 0.02
 
 # ====================
 # SENSORS
@@ -37,9 +38,18 @@ SOUND_RADIUS = 100
 WALL_SENSOR_RADIUS = 80      # Max distance for wall sensor
 
 # ====================
+# SPIKES
+# ====================
+SPIKE_COUNT = 12             # Number of spike balls in the world
+SPIKE_RADIUS = 4             # Visual/collision radius (same as food by default)
+SPIKE_COLOR = (220, 60, 60)  # Red-ish
+SPIKE_ENERGY_DAMAGE = 25.0   # Energy drained on contact per hit
+SPIKE_HIT_COOLDOWN = 30      # Frames before the same spike can damage the same agent again
+
+# ====================
 # BRAIN
 # ====================
-BRAIN_INPUTS = 9             # See sensors.py for breakdown
+BRAIN_INPUTS = 20            # See sensors.py for full breakdown
 BRAIN_HIDDEN = 8
 BRAIN_OUTPUTS = 2            # [turn, speed]
 
@@ -47,9 +57,9 @@ BRAIN_OUTPUTS = 2            # [turn, speed]
 # EVOLUTION
 # ====================
 POPULATION_MIN = 15          # Trigger reproduction below this
-POPULATION_MAX = 60
-MUTATION_RATE = 0.15         # Probability of mutating each weight
-MUTATION_STRENGTH = 0.3      # Std dev of Gaussian noise
+POPULATION_MAX = 80
+MUTATION_RATE = 0.05         # Probability of mutating each weight
+MUTATION_STRENGTH = 0.2      # Std dev of Gaussian noise
 ELITE_FRACTION = 0.3         # Top fraction used as parents
 FITNESS_LIFESPAN_W = 0.4
 FITNESS_FOOD_W = 0.5

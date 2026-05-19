@@ -1,17 +1,19 @@
 import numpy as np
 from simulation.agent import Agent
 from simulation.food import FoodManager
+from simulation.spikes import SpikeManager
 from simulation.evolution import EvolutionManager
 from simulation.sensors import compute_sensors
 from config import (AGENT_INITIAL_COUNT, WORLD_WIDTH, WORLD_HEIGHT,
-                    AGENT_RADIUS, FOOD_RADIUS)
+                    AGENT_RADIUS, FOOD_RADIUS, SPIKE_RADIUS)
 
 
 class World:
     def __init__(self):
-        self.food_mgr = FoodManager()
-        self.evo_mgr = EvolutionManager()
-        self.agents = [Agent() for _ in range(AGENT_INITIAL_COUNT)]
+        self.food_mgr  = FoodManager()
+        self.spike_mgr = SpikeManager()
+        self.evo_mgr   = EvolutionManager()
+        self.agents    = [Agent() for _ in range(AGENT_INITIAL_COUNT)]
         self.evo_mgr.total_born = AGENT_INITIAL_COUNT
         self.frame = 0
 
@@ -21,11 +23,12 @@ class World:
         self.frame += 1
         self.food_mgr.update()
 
-        food_list = self.food_mgr.items
+        food_list  = self.food_mgr.items
+        spike_list = self.spike_mgr.items
 
         # Sense → Think → Act
         for agent in self.agents:
-            sensors = compute_sensors(agent, food_list, self.agents)
+            sensors = compute_sensors(agent, food_list, self.agents, spike_list)
             agent.update(sensors)
 
         # Food consumption
@@ -35,9 +38,17 @@ class World:
             for food in food_list:
                 if not food.alive:
                     continue
-                dist = np.hypot(agent.x - food.x, agent.y - food.y)
-                if dist < AGENT_RADIUS + FOOD_RADIUS:
+                if np.hypot(agent.x - food.x, agent.y - food.y) < AGENT_RADIUS + FOOD_RADIUS:
                     agent.eat(food)
+
+        # Spike damage (SpikeManager handles cooldown + energy drain)
+        for spike in spike_list:
+            spike.tick_cooldowns()
+            for agent in self.agents:
+                if agent.alive:
+                    hit = spike.try_hit(agent)
+                    if hit:
+                        agent.spike_hits += 1
 
         # Handle deaths
         for agent in self.agents:
@@ -53,7 +64,6 @@ class World:
     # ── Accessors ────────────────────────────────────────────────────────────
 
     def agent_at(self, mx, my):
-        """Return the agent closest to (mx, my) within click radius, or None."""
         for agent in self.agents:
             if np.hypot(agent.x - mx, agent.y - my) < AGENT_RADIUS + 8:
                 return agent
@@ -70,3 +80,7 @@ class World:
     @property
     def food_count(self):
         return self.food_mgr.count()
+
+    @property
+    def spike_count(self):
+        return self.spike_mgr.count()

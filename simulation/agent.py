@@ -4,7 +4,7 @@ from config import (AGENT_RADIUS, AGENT_INITIAL_ENERGY, AGENT_MAX_ENERGY,
                     AGENT_ENERGY_DECAY, AGENT_MAX_AGE, AGENT_MOVE_SPEED_MAX,
                     AGENT_TURN_SPEED_MAX, FOOD_ENERGY, WORLD_WIDTH, WORLD_HEIGHT,
                     ENERGY_BAR_WIDTH, ENERGY_BAR_HEIGHT, ENERGY_BAR_OFFSET,
-                    SELECTED_COLOR, FOOD_RADIUS)
+                    SELECTED_COLOR, FOOD_RADIUS, AGENT_SPEED_DECAY_COST)
 from simulation.brain import Brain
 from utils.math_utils import clamp, random_direction
 
@@ -47,9 +47,10 @@ class Agent:
         # Stats for fitness calculation
         self.food_eaten = 0
         self.distance_traveled = 0.0
+        self.spike_hits = 0
 
         # Last sensor + output (for UI inspection)
-        self.last_sensors = np.zeros(9, dtype=np.float32)
+        self.last_sensors = np.zeros(20, dtype=np.float32)
         self.last_outputs = np.zeros(2, dtype=np.float32)
 
     # ── Update ───────────────────────────────────────────────────────────────
@@ -93,7 +94,7 @@ class Agent:
         self.y = new_y
 
         # Energy decay (moving costs a tiny bit more)
-        decay = AGENT_ENERGY_DECAY + self.speed * 0.01
+        decay = AGENT_ENERGY_DECAY + self.speed * AGENT_SPEED_DECAY_COST
         self.energy -= decay
         self.age += 1
 
