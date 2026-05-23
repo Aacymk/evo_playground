@@ -1,10 +1,10 @@
 import numpy as np
 import pygame
 from config import (AGENT_RADIUS, AGENT_INITIAL_ENERGY, AGENT_MAX_ENERGY,
-                    AGENT_ENERGY_DECAY, AGENT_MAX_AGE, AGENT_MOVE_SPEED_MAX,
-                    AGENT_TURN_SPEED_MAX, FOOD_ENERGY, WORLD_WIDTH, WORLD_HEIGHT,
-                    ENERGY_BAR_WIDTH, ENERGY_BAR_HEIGHT, ENERGY_BAR_OFFSET,
-                    SELECTED_COLOR, FOOD_RADIUS, AGENT_SPEED_DECAY_COST)
+                    AGENT_ENERGY_DECAY, AGENT_SPEED_DECAY_COST, AGENT_MAX_AGE,
+                    AGENT_MOVE_SPEED_MAX, AGENT_TURN_SPEED_MAX, FOOD_ENERGY,
+                    WORLD_WIDTH, WORLD_HEIGHT, ENERGY_BAR_WIDTH, ENERGY_BAR_HEIGHT,
+                    ENERGY_BAR_OFFSET, SELECTED_COLOR, FOOD_RADIUS)
 from simulation.brain import Brain
 from utils.math_utils import clamp, random_direction
 
@@ -26,14 +26,37 @@ def _next_id():
     return _agent_id_counter
 
 
+def _safe_spawn(margin, forbidden_positions=None, min_clear=20, max_attempts=50):
+    """
+    Pick a random (x, y) that isn't within min_clear pixels of any forbidden
+    position (spike locations). Falls back to pure random after max_attempts.
+    """
+    for _ in range(max_attempts):
+        x = np.random.uniform(margin, WORLD_WIDTH - margin)
+        y = np.random.uniform(margin, WORLD_HEIGHT - margin)
+        if not forbidden_positions:
+            return x, y
+        too_close = any(
+            np.hypot(x - fx, y - fy) < min_clear
+            for fx, fy in forbidden_positions
+        )
+        if not too_close:
+            return x, y
+    # Fallback — just return the last attempt, better than an infinite loop
+    return x, y
+
+
 class Agent:
-    def __init__(self, x=None, y=None, brain=None, color=None, generation=0):
+    def __init__(self, x=None, y=None, brain=None, color=None, generation=0,
+                 forbidden_positions=None):
         self.id = _next_id()
         self.generation = generation
 
         margin = AGENT_RADIUS + 20
-        self.x = x if x is not None else np.random.uniform(margin, WORLD_WIDTH - margin)
-        self.y = y if y is not None else np.random.uniform(margin, WORLD_HEIGHT - margin)
+        if x is not None and y is not None:
+            self.x, self.y = x, y
+        else:
+            self.x, self.y = _safe_spawn(margin, forbidden_positions)
         self.angle = random_direction()
         self.speed = 0.0
 
@@ -53,6 +76,10 @@ class Agent:
         self.last_sensors = np.zeros(20, dtype=np.float32)
         self.last_outputs = np.zeros(2, dtype=np.float32)
 
+        # Action history for logging (sampled every N frames to keep memory bounded)
+        self.action_history: list = []
+        self._action_sample_interval = 10  # record every 10 frames
+
     # ── Update ───────────────────────────────────────────────────────────────
 
     def update(self, sensors):
@@ -66,6 +93,10 @@ class Agent:
         turn = float(outputs[0]) * AGENT_TURN_SPEED_MAX
         raw_speed = float(outputs[1])
         self.speed = clamp((raw_speed + 1.0) / 2.0 * AGENT_MOVE_SPEED_MAX, 0.0, AGENT_MOVE_SPEED_MAX)
+
+        # Sample action history periodically (every N frames)
+        if self.age % self._action_sample_interval == 0:
+            self.action_history.append([float(outputs[0]), float(outputs[1])])
 
         self.angle += turn
         dx = np.cos(self.angle) * self.speed

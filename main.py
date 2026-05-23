@@ -4,6 +4,8 @@ EVO-SIM — 2D Evolutionary Emergence Sandbox
 Run:   python main.py
 Click an agent to inspect its sensors, brain, and stats.
 Close the window or press ESC to quit.
+
+Results are saved automatically to runs/<timestamp>/
 """
 
 import sys
@@ -12,6 +14,7 @@ from config import WORLD_WIDTH, WORLD_HEIGHT, FPS_TARGET
 from simulation.world import World
 from visualization.renderer import Renderer
 from visualization.ui import UIPanel
+from evolog.generation_logger import GenerationLogger
 
 
 def main():
@@ -20,7 +23,8 @@ def main():
     pygame.display.set_caption("EVO-SIM — Evolutionary Emergence Sandbox")
     clock = pygame.time.Clock()
 
-    world = World()
+    logger = GenerationLogger()
+    world = World(logger=logger)
     renderer = Renderer(screen)
     ui = UIPanel()
 

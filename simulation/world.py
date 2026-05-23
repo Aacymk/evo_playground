@@ -5,17 +5,21 @@ from simulation.spikes import SpikeManager
 from simulation.evolution import EvolutionManager
 from simulation.sensors import compute_sensors
 from config import (AGENT_INITIAL_COUNT, WORLD_WIDTH, WORLD_HEIGHT,
-                    AGENT_RADIUS, FOOD_RADIUS, SPIKE_RADIUS)
+                    AGENT_RADIUS, FOOD_RADIUS, LOG_INTERVAL, CHECKPOINT_INTERVAL)
 
 
 class World:
-    def __init__(self):
+    def __init__(self, logger=None):
         self.food_mgr  = FoodManager()
         self.spike_mgr = SpikeManager()
         self.evo_mgr   = EvolutionManager()
+        self.logger    = logger
         self.agents    = [Agent() for _ in range(AGENT_INITIAL_COUNT)]
         self.evo_mgr.total_born = AGENT_INITIAL_COUNT
         self.frame = 0
+
+        # Track generation at last checkpoint so we fire once per gen interval
+        self._last_checkpoint_gen = -1
 
     # ── Main update ──────────────────────────────────────────────────────────
 
@@ -41,7 +45,7 @@ class World:
                 if np.hypot(agent.x - food.x, agent.y - food.y) < AGENT_RADIUS + FOOD_RADIUS:
                     agent.eat(food)
 
-        # Spike damage (SpikeManager handles cooldown + energy drain)
+        # Spike damage
         for spike in spike_list:
             spike.tick_cooldowns()
             for agent in self.agents:
@@ -58,8 +62,23 @@ class World:
         self.agents = [a for a in self.agents if a.alive]
 
         # Repopulate
-        new_agents = self.evo_mgr.maybe_repopulate(self.agents)
+        new_agents = self.evo_mgr.maybe_repopulate(
+            self.agents, spike_mgr=self.spike_mgr
+        )
         self.agents.extend(new_agents)
+
+        # ── Frame-interval logging ────────────────────────────────────────────
+        if self.logger and LOG_INTERVAL > 0 and self.frame % LOG_INTERVAL == 0:
+            self.logger.log_frame(self)
+            self.evo_mgr.reset_gen_counters()
+
+        # ── Generation-interval checkpoint ────────────────────────────────────
+        if (self.logger and CHECKPOINT_INTERVAL > 0
+                and self.evo_mgr.generation != self._last_checkpoint_gen
+                and self.evo_mgr.generation % CHECKPOINT_INTERVAL == 0):
+            self._last_checkpoint_gen = self.evo_mgr.generation
+            self.logger.save_checkpoint(self.evo_mgr.generation, self.frame,
+                                        self.evo_mgr.dead_pool)
 
     # ── Accessors ────────────────────────────────────────────────────────────
 

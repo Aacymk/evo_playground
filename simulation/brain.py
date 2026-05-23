@@ -1,49 +1,75 @@
 import numpy as np
-from config import BRAIN_INPUTS, BRAIN_HIDDEN, BRAIN_OUTPUTS, MUTATION_RATE, MUTATION_STRENGTH
+from config import BRAIN_INPUTS, BRAIN_HIDDEN_LAYERS, BRAIN_OUTPUTS, MUTATION_RATE, MUTATION_STRENGTH
 
 
 class Brain:
     """
-    A minimal feedforward neural network.
-    Architecture: inputs -> hidden(tanh) -> outputs(tanh)
-    Weights ARE the genome — no backprop, only mutation.
+    Feedforward neural network with a configurable number of hidden layers.
+
+    Architecture is driven by BRAIN_HIDDEN_LAYERS in config:
+        []         → inputs directly to outputs (linear, no hidden layer)
+        [8]        → one hidden layer of 8 neurons  (original behaviour)
+        [8, 16, 6] → three hidden layers: 8 → 16 → 6
+
+    All hidden activations: tanh.  Output activation: tanh.
+    Weights ARE the genome — no backprop, mutation only.
     """
 
     def __init__(self, weights=None):
+        # Build layer size list: [inputs, h1, h2, ..., outputs]
+        self._sizes = [BRAIN_INPUTS] + list(BRAIN_HIDDEN_LAYERS) + [BRAIN_OUTPUTS]
+
         if weights is None:
-            # Random initialization in [-1, 1]
-            self.W1 = np.random.uniform(-1, 1, (BRAIN_HIDDEN, BRAIN_INPUTS))
-            self.b1 = np.random.uniform(-0.5, 0.5, (BRAIN_HIDDEN,))
-            self.W2 = np.random.uniform(-1, 1, (BRAIN_OUTPUTS, BRAIN_HIDDEN))
-            self.b2 = np.random.uniform(-0.5, 0.5, (BRAIN_OUTPUTS,))
+            self._Ws = []
+            self._bs = []
+            for i in range(len(self._sizes) - 1):
+                fan_in  = self._sizes[i]
+                fan_out = self._sizes[i + 1]
+                self._Ws.append(np.random.uniform(-1, 1, (fan_out, fan_in)))
+                self._bs.append(np.random.uniform(-0.5, 0.5, (fan_out,)))
         else:
-            self.W1, self.b1, self.W2, self.b2 = weights
+            # weights is a tuple of (Ws_list, bs_list)
+            self._Ws, self._bs = weights
+            # Ensure they are proper numpy arrays (important after npz reload)
+            self._Ws = [np.array(w) for w in self._Ws]
+            self._bs = [np.array(b) for b in self._bs]
 
     def forward(self, sensor_inputs: np.ndarray) -> np.ndarray:
         """
-        sensor_inputs: 1D array of length BRAIN_INPUTS
-        returns: 1D array of length BRAIN_OUTPUTS in [-1, 1]
+        sensor_inputs: 1D float32 array of length BRAIN_INPUTS
+        returns:       1D array of length BRAIN_OUTPUTS in [-1, 1]
         """
-        h = np.tanh(self.W1 @ sensor_inputs + self.b1)
-        out = np.tanh(self.W2 @ h + self.b2)
-        return out
+        x = sensor_inputs
+        for i, (W, b) in enumerate(zip(self._Ws, self._bs)):
+            x = np.tanh(W @ x + b)
+        return x
 
     def get_weights(self):
-        return (self.W1.copy(), self.b1.copy(), self.W2.copy(), self.b2.copy())
+        """Return a deep-copy tuple of (Ws, bs) lists — safe to store."""
+        return ([W.copy() for W in self._Ws],
+                [b.copy() for b in self._bs])
 
     def mutate(self):
-        """Return a new Brain with Gaussian noise applied to weights."""
-        W1 = self.W1.copy()
-        b1 = self.b1.copy()
-        W2 = self.W2.copy()
-        b2 = self.b2.copy()
-
-        for arr in (W1, b1, W2, b2):
-            mask = np.random.rand(*arr.shape) < MUTATION_RATE
-            arr += mask * np.random.normal(0, MUTATION_STRENGTH, arr.shape)
-            np.clip(arr, -3, 3, out=arr)  # prevent runaway weights
-
-        return Brain((W1, b1, W2, b2))
+        """Return a new Brain with Gaussian noise applied to all weights."""
+        new_Ws = []
+        new_bs = []
+        for W, b in zip(self._Ws, self._bs):
+            W = W.copy()
+            b = b.copy()
+            mask_W = np.random.rand(*W.shape) < MUTATION_RATE
+            mask_b = np.random.rand(*b.shape) < MUTATION_RATE
+            W += mask_W * np.random.normal(0, MUTATION_STRENGTH, W.shape)
+            b += mask_b * np.random.normal(0, MUTATION_STRENGTH, b.shape)
+            np.clip(W, -3, 3, out=W)
+            np.clip(b, -3, 3, out=b)
+            new_Ws.append(W)
+            new_bs.append(b)
+        return Brain((new_Ws, new_bs))
 
     def clone(self):
-        return Brain(self.get_weights())
+        Ws, bs = self.get_weights()
+        return Brain((Ws, bs))
+
+    @property
+    def layer_sizes(self):
+        return self._sizes

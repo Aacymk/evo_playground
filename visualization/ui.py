@@ -129,9 +129,8 @@ def _bar(value, width=7):
 
 def _energy_color(energy):
     import config
-    ratio = max(0.0, min(1.0, energy / config.AGENT_MAX_ENERGY))
-    r = int(255 * (1 - ratio))
-    g = int(200 * ratio)
+    r = int(255 * (1 - energy / config.AGENT_MAX_ENERGY))
+    g = int(200 * energy / config.AGENT_MAX_ENERGY)
     return (r, g, 40)
 
 

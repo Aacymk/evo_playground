@@ -1,0 +1,42 @@
+{
+  "generation": 182,
+  "fitness": 0.2705,
+  "lifespan": 754,
+  "food_eaten": 5,
+  "distance_traveled": 2246.5,
+  "spike_hits": 9,
+  "color": [
+    183,
+    197,
+    221
+  ],
+  "generation_stats": {
+    "generation": 182,
+    "frame": 208803,
+    "population_size": 5,
+    "average_fitness": 0.1782,
+    "best_fitness": 0.2705,
+    "worst_fitness": 0.0723,
+    "average_lifespan": 728.6,
+    "best_lifespan": 1063,
+    "average_food_eaten": 1.8,
+    "average_distance_traveled": 1802.3,
+    "average_spike_hits": 4.0,
+    "behavioral_diversity_score": 0.2437,
+    "average_weight_magnitude": 0.5372,
+    "weight_std": 0.6397,
+    "convergence_score": 0.0676,
+    "mutation_rate": 0.15,
+    "mutation_strength": 0.3,
+    "recurrent_memory_usage": 0
+  },
+  "action_history_summary": {
+    "samples": 76,
+    "mean_turn": -0.0099,
+    "std_turn": 0.3924,
+    "mean_speed": 0.6863,
+    "std_speed": 0.3051,
+    "archetype": "balanced_explorer"
+  },
+  "weights_file": "gen_0182.npz"
+}

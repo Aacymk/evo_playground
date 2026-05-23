@@ -1,0 +1,7 @@
+generation,frame,population_size,best_fitness,average_fitness,best_lifespan,average_lifespan,average_food_eaten,convergence_score,weights_file
+50,60475,156,1.0,0.946,3000,2978.0,22.58,0.1732,checkpoints/chk_000050.npz
+100,112107,196,1.0,0.9159,3000,2843.1,24.82,0.4715,checkpoints/chk_000100.npz
+150,168740,166,1.0,0.9803,3000,2972.0,26.03,0.5258,checkpoints/chk_000150.npz
+200,225740,191,1.0,0.9552,3000,2936.3,24.07,0.5299,checkpoints/chk_000200.npz
+250,276844,186,1.0,0.948,3000,2898.2,22.89,0.5101,checkpoints/chk_000250.npz
+300,336479,3,0.2573,0.1718,974,719.3,1.33,0.4034,checkpoints/chk_000300.npz

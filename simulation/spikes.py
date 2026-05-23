@@ -38,7 +38,7 @@ class Spike:
         if agent.id in self._cooldowns:
             return False  # still in cooldown
         # Hit!
-        agent.energy = max(0.0, agent.energy - SPIKE_ENERGY_DAMAGE)
+        agent.energy -= SPIKE_ENERGY_DAMAGE
         self._cooldowns[agent.id] = SPIKE_HIT_COOLDOWN
         return True
 
@@ -69,6 +69,14 @@ class Spike:
 class SpikeManager:
     def __init__(self):
         self.items = [Spike() for _ in range(SPIKE_COUNT)]
+
+    def reshuffle(self):
+        """Replace all spikes with freshly randomized positions. Call between generations."""
+        self.items = [Spike() for _ in range(SPIKE_COUNT)]
+
+    def positions(self):
+        """Return list of (x, y) for all current spikes — used for safe agent spawning."""
+        return [(s.x, s.y) for s in self.items]
 
     def update(self, agents):
         """Tick cooldowns and check all agent–spike collisions."""
