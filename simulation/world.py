@@ -5,7 +5,7 @@ from simulation.spikes import SpikeManager
 from simulation.evolution import EvolutionManager
 from simulation.sensors import compute_sensors
 from config import (AGENT_INITIAL_COUNT, WORLD_WIDTH, WORLD_HEIGHT,
-                    AGENT_RADIUS, FOOD_RADIUS, LOG_INTERVAL, CHECKPOINT_INTERVAL)
+                    AGENT_RADIUS, FOOD_RADIUS)
 
 
 class World:
@@ -67,15 +67,16 @@ class World:
         )
         self.agents.extend(new_agents)
 
+        import config as _cfg
         # ── Frame-interval logging ────────────────────────────────────────────
-        if self.logger and LOG_INTERVAL > 0 and self.frame % LOG_INTERVAL == 0:
+        if self.logger and _cfg.LOG_INTERVAL > 0 and self.frame % _cfg.LOG_INTERVAL == 0:
             self.logger.log_frame(self)
             self.evo_mgr.reset_gen_counters()
 
         # ── Generation-interval checkpoint ────────────────────────────────────
-        if (self.logger and CHECKPOINT_INTERVAL > 0
+        if (self.logger and _cfg.CHECKPOINT_INTERVAL > 0
                 and self.evo_mgr.generation != self._last_checkpoint_gen
-                and self.evo_mgr.generation % CHECKPOINT_INTERVAL == 0):
+                and self.evo_mgr.generation % _cfg.CHECKPOINT_INTERVAL == 0):
             self._last_checkpoint_gen = self.evo_mgr.generation
             self.logger.save_checkpoint(self.evo_mgr.generation, self.frame,
                                         self.evo_mgr.dead_pool)

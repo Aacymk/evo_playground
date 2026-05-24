@@ -6,18 +6,50 @@ Click an agent to inspect its sensors, brain, and stats.
 Close the window or press ESC to quit.
 
 Results are saved automatically to runs/<timestamp>/
+Set RUN_TESTS_ON_STARTUP = True in config.py to run sanity checks first.
 """
 
 import sys
 import pygame
-from config import WORLD_WIDTH, WORLD_HEIGHT, FPS_TARGET
+from config import WORLD_WIDTH, WORLD_HEIGHT, FPS_TARGET, RUN_TESTS_ON_STARTUP
 from simulation.world import World
 from visualization.renderer import Renderer
 from visualization.ui import UIPanel
 from evolog.generation_logger import GenerationLogger
 
 
+def _run_startup_tests():
+    """
+    Run the fast test modules before opening the window.
+    Skips the slow logging/determinism tests so startup stays under ~60s.
+    """
+    import subprocess
+    fast_modules = [
+        "tests/test_brain_evolution.py",
+        "tests/test_lifecycle.py",
+        "tests/test_sensors_world.py",
+        "tests/test_conservation.py",
+    ]
+    print("=" * 55)
+    print("RUN_TESTS_ON_STARTUP = True — running sanity checks...")
+    print("=" * 55)
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest"] + fast_modules + ["-v", "--tb=short"],
+        capture_output=False,
+    )
+    if result.returncode != 0:
+        print("\n[STARTUP] Tests FAILED — fix issues before running the sim.")
+        print("[STARTUP] Set RUN_TESTS_ON_STARTUP = False in config.py to skip.")
+        sys.exit(1)
+    print("=" * 55)
+    print("[STARTUP] All checks passed. Starting simulation...")
+    print("=" * 55)
+
+
 def main():
+    if RUN_TESTS_ON_STARTUP:
+        _run_startup_tests()
+
     pygame.init()
     screen = pygame.display.set_mode((WORLD_WIDTH, WORLD_HEIGHT))
     pygame.display.set_caption("EVO-SIM — Evolutionary Emergence Sandbox")

@@ -38,7 +38,7 @@ class Spike:
         if agent.id in self._cooldowns:
             return False  # still in cooldown
         # Hit!
-        agent.energy -= SPIKE_ENERGY_DAMAGE
+        agent.energy = max(0.0, agent.energy - SPIKE_ENERGY_DAMAGE)
         self._cooldowns[agent.id] = SPIKE_HIT_COOLDOWN
         return True
 

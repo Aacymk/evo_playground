@@ -73,8 +73,12 @@ FITNESS_FOOD_W = 0.5
 FITNESS_DISTANCE_W = 0.1
 
 # ====================
-# FAST TRAINING
+# TESTING
 # ====================
+RUN_TESTS_ON_STARTUP = True  # Set True to run the fast sanity checks before
+                               # the sim window opens. Catches regressions without
+                               # needing to run pytest manually.
+                               # Full suite: python -m pytest tests/ -v
 HEADLESS_UPDATES_PER_TICK = 10  # Simulation steps per frame in fast-train mode
                                  # (irrelevant when running fully headless)
 

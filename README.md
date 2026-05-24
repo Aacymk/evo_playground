@@ -11,7 +11,7 @@ A minimal artificial life simulation. Agents with small neural network brains ar
 The simulation runs in a 1200×800 arena. Three things exist in it:
 
 - **Food** — small green dots. Randomly placed. They respawn periodically. Eating one restores energy.
-- **Spikes** — red hazard balls fixed in place. Contact with a spike immediately drains a chunk of energy. Spike positions are randomized at the start of each new generation so agents cannot memorize a fixed layout.
+- **Spikes** — red hazard balls fixed in place. Contact drains energy immediately. Spike positions are randomized at the start of each new generation so agents cannot memorize a fixed layout.
 - **Agents** — the evolving organisms.
 
 ### Agents
@@ -19,13 +19,13 @@ The simulation runs in a 1200×800 arena. Three things exist in it:
 Each agent is a circle with a direction indicator and an energy bar. Every agent independently tracks:
 
 - **Position and heading** — where it is and which way it's facing
-- **Energy** — drains at a flat rate each frame, plus a small additional cost proportional to movement speed. Eating food restores energy. Reaching zero energy kills the agent.
-- **Age** — frame counter. Agents die of old age at `AGENT_MAX_AGE` frames even if they still have energy.
+- **Energy** — drains at a flat rate each frame, plus a small extra cost proportional to movement speed. Eating food restores energy. Reaching zero kills the agent.
+- **Age** — frame counter. Agents die of old age at `AGENT_MAX_AGE` frames regardless of energy.
 - **Statistics** — food eaten, distance traveled, spike hits — used for fitness scoring and logging.
 
 ### Sensors
 
-Every frame, each agent reads 20 sensor channels that describe what it can perceive:
+Every frame, each agent reads 20 sensor channels:
 
 | Group | Channels | What it detects |
 |---|---|---|
@@ -38,9 +38,7 @@ Every frame, each agent reads 20 sensor channels that describe what it can perce
 | Sound | 17 | Movement noise from nearby agents |
 | Internal state | 18–19 | Current energy level; random noise |
 
-All values are normalized to roughly [-1, 1] or [0, 1] before being fed to the brain.
-
-The **vision cone** only detects objects within `VISION_RADIUS` pixels AND within the `VISION_FOV` angle centered on the agent's heading (120° by default). Objects behind the agent are invisible.
+All values are normalized to [-1, 1] or [0, 1] before being fed to the brain. The **vision cone** only detects objects within `VISION_RADIUS` pixels AND within the `VISION_FOV` angle centered on the agent's heading (120° by default). Objects behind the agent are invisible.
 
 ### The Brain
 
@@ -49,7 +47,7 @@ Each agent has a small feedforward neural network built with NumPy:
 ```
 20 sensor inputs
       ↓  tanh
-  hidden layer(s)       ← configurable via BRAIN_HIDDEN_LAYERS
+  hidden layer(s)       ← configured via BRAIN_HIDDEN_LAYERS
       ↓  tanh
   2 outputs: [turn, speed]
 ```
@@ -61,7 +59,7 @@ The network weights **are the genome**. There is no learning during an agent's l
 
 ### Evolution
 
-Evolution is **demand-driven**, not time-boxed. Each frame, if the alive population drops below `POPULATION_MIN`, a new wave of agents is spawned immediately. This means generation length is an emergent property of how long agents survive, not a fixed clock.
+Evolution is **demand-driven**, not time-boxed. Each frame, if the alive population drops below `POPULATION_MIN`, a new wave of agents is spawned immediately. Generation length is therefore an emergent property of how long agents survive, not a fixed clock.
 
 **Fitness** is computed when an agent dies:
 ```
@@ -70,9 +68,9 @@ fitness = 0.4 × (age / max_age)
         + 0.1 × min(1, distance_traveled / 5000)
 ```
 
-Spike hits penalize fitness indirectly — they drain energy and shorten lifespan, which reduces the age and food components.
+Spike hits penalize fitness indirectly by draining energy and cutting lifespan short.
 
-**Parent selection** draws from a rolling pool of the most recent 200 dead agents. The top `ELITE_FRACTION` (30% by default) are eligible as parents. Each child picks one parent at random from that elite set — there is no crossover, one parent per child.
+**Parent selection** draws from a rolling pool of the most recent 200 dead agents. The top `ELITE_FRACTION` (30% by default) are eligible as parents. Each child picks one parent at random from that set — there is no crossover, one parent per child.
 
 **Mutation** applies independently to every weight:
 ```
@@ -81,11 +79,11 @@ if random() < MUTATION_RATE:
     weight = clamp(weight, -3, 3)
 ```
 
-Agents also inherit a slightly color-drifted version of their parent's color, so loosely related lineages share similar hues over time.
+Children also inherit a slightly color-drifted version of their parent's color, so loosely related lineages share similar hues over time.
 
 ### Logging
 
-The simulation writes a CSV row every `LOG_INTERVAL` frames — a live snapshot of all currently alive agents. This captures real population state rather than aggregating over a generation window. It also saves weight checkpoints and best-agent snapshots at configurable intervals.
+The simulation writes a CSV row every `LOG_INTERVAL` frames — a live snapshot of all currently alive agents. This gives accurate population counts and behavioral stats rather than aggregating over an entire generation. Weight checkpoints and best-agent snapshots are saved at separate configurable intervals.
 
 ---
 
@@ -112,7 +110,7 @@ python fast_train.py --generations 10000      # stop at a generation target
 python fast_train.py --generations 500 --run-id my_experiment
 python fast_train.py --print-every 25         # progress line every 25 gens
 ```
-No window, no FPS cap. Roughly 2× faster than visual mode. All output files are written identically.
+No window, no FPS cap. Roughly 2× faster than visual mode. All output files are written identically to `main.py`.
 
 ### Replay a checkpoint
 ```bash
@@ -125,50 +123,101 @@ python replay.py --checkpoint chk_000500.npz --mutation-rate 0.05
 
 ---
 
+## Testing
+
+### Run the test suite
+```bash
+python run_tests.py              # fast suites only (~90s)
+python run_tests.py --all        # everything including slow suites (~5–10 min)
+python run_tests.py --suite brain
+python run_tests.py --suite lifecycle
+python run_tests.py --suite sensors
+python run_tests.py --suite conservation
+python run_tests.py --suite determinism   # slow
+python run_tests.py --suite logging       # slow
+```
+
+Or use pytest directly:
+```bash
+python -m pytest tests/ -q
+python -m pytest tests/test_brain_evolution.py -v
+```
+
+### Run tests before the sim window opens
+
+In `config.py`:
+```python
+RUN_TESTS_ON_STARTUP = True
+```
+When enabled, `main.py` runs the four fast suites via subprocess before calling `pygame.init()`. If anything fails it prints the failing test and exits without opening the window. Flip back to `False` once you're confident.
+
+### What each suite tests
+
+| Suite | File | What it covers |
+|---|---|---|
+| Brain & Evolution | `test_brain_evolution.py` | Output shape/bounds always correct, clone is a true deep copy, mutation changes weights, variable hidden layer configs, empty hidden layers, repopulation fires at right threshold, children tagged to correct generation, elite-only parent selection, fitness always in [0, 1] |
+| Lifecycle & Deaths | `test_lifecycle.py` | Exact spawn count, manual kill accounting (N killed → exactly N deaths recorded), energy depletion kills agent, age limit kills agent, food energy capped at max, dead agents removed exactly one frame after dying, death recorded correctly across generation boundary, spike cooldown blocks re-damage, spike damage clamped to zero |
+| Sensors & World | `test_sensors_world.py` | Sensor vector always length 20, food ahead detected, food behind not visible, food beyond radius not detected, wall sensor values at boundary, position sensors at center, all 20 channels stay in valid ranges over 500 frames, agents never leave world bounds, safe spawn never overlaps spikes |
+| Conservation & Cohort | `test_conservation.py` | `alive + dead == total_born` at all times, no duplicate agent IDs, no `alive=False` agent stuck in live list, death/born counts monotonically non-decreasing, cohort invariant (`born[gen] == dead[gen] + alive[gen]`) for every completed generation |
+| Determinism *(slow)* | `test_determinism.py` | Same numpy seed → identical world state after N frames, different seeds diverge, mutation is reproducible with seed, generation milestones match across runs |
+| Logging *(slow)* | `test_logging.py` | All 36 CSV columns present in correct order, no duplicate frames, rows written at exact `LOG_INTERVAL` multiples, fitness values in [0, 1], `best >= average` always, archetype percentages sum to exactly 1.0, checkpoint NPZ weight shapes correct, `alive_population` matches actual `len(world.agents)` at every logged frame |
+
+### Bugs found and fixed by tests
+
+These production bugs were caught during test development and were not previously visible:
+
+| Bug | Test that caught it | Fix |
+|---|---|---|
+| Children tagged to parent's generation instead of the new one | `test_children_get_incremented_generation` | Increment `self.generation` before creating children, not after |
+| Spike damage unclamped — agent energy could go deeply negative | `test_negative_energy_clamped_by_spike` | `agent.energy = max(0.0, agent.energy - SPIKE_ENERGY_DAMAGE)` |
+| Touch wall sensor boundary one pixel off from actual bounce clamp | `test_wall_sensor_at_left_wall` | Sensor fires at `x <= AGENT_RADIUS`, which is exactly where the bounce clamp places agents |
+
+---
+
 ## Output Files
 
 ```
 runs/
 └── 20240101_120000/
     ├── generations.csv       — one row every LOG_INTERVAL frames
-    ├── checkpoints.csv       — summary row per checkpoint
+    ├── checkpoints.csv       — summary row per checkpoint generation
     ├── best_agents/
-    │   ├── frame_00000500.npz
-    │   ├── frame_00000500.json
+    │   ├── frame_00000500.npz   — best alive agent's weights at that frame
+    │   ├── frame_00000500.json  — fitness, age, food eaten, action summary
     │   └── ...
     └── checkpoints/
-        ├── chk_000050.npz
+        ├── chk_000050.npz       — full dead pool weights at gen 50
         └── ...
 ```
 
 ### generations.csv — all columns
 
-Each row is a **live snapshot** of the world at that frame. All agent statistics describe the agents currently alive at that moment.
+Each row is a **live snapshot** of the world at that frame. All statistics describe agents currently alive at that moment.
 
 | Column | Description |
 |---|---|
 | `generation` | Current generation number |
 | `frame` | World frame when this row was written |
-| `alive_population` | Number of agents alive right now |
+| `alive_population` | Agents alive right now |
 | `total_agents_ever_born` | Cumulative births since run started |
 | `total_agents_dead` | Cumulative deaths since run started |
-| `current_oldest_alive_age` | Age in frames of the longest-surviving living agent |
+| `current_oldest_alive_age` | Age of the longest-surviving living agent |
 | `average_alive_age` | Mean age of all living agents |
 | `median_alive_age` | Median age of all living agents |
-| `average_alive_fitness` | Mean fitness of living agents (computed at snapshot time) |
+| `average_alive_fitness` | Mean fitness of living agents at snapshot time |
 | `best_alive_fitness` | Highest fitness among living agents |
 | `fitness_10th_percentile` | 10th percentile fitness |
 | `fitness_50th_percentile` | Median fitness |
 | `fitness_75th_percentile` | 75th percentile fitness |
 | `fitness_90th_percentile` | 90th percentile fitness |
 | `fitness_std` | Standard deviation of fitness |
-| `behavioral_diversity_score` | 0–1. Mean pairwise distance between agents' average action vectors. Higher = more varied movement strategies |
-| `action_entropy` | Shannon entropy of discretized (turn, speed) pairs across the population. Higher = strategies are more spread out |
+| `behavioral_diversity_score` | 0–1. Mean pairwise distance between agents' average action vectors. Higher = more varied strategies |
+| `action_entropy` | Shannon entropy of discretized (turn, speed) pairs. Higher = strategies more spread out |
 | `mean_turn_output` | Mean of each agent's average turn output |
 | `std_turn_output` | Std deviation of mean turn outputs across agents |
 | `mean_speed_output` | Mean of each agent's average speed output |
 | `std_speed_output` | Std deviation of mean speed outputs across agents |
-| `pct_stationary` | Fraction of agents classified as mostly stationary |
+| `pct_stationary` | Fraction classified as mostly stationary |
 | `pct_straight_runner` | Fraction that move mostly straight |
 | `pct_erratic` | Fraction with high turn variance |
 | `pct_left_turner` | Fraction that consistently turn left |
@@ -176,19 +225,19 @@ Each row is a **live snapshot** of the world at that frame. All agent statistics
 | `pct_balanced_explorer` | Fraction that don't fit a strong pattern |
 | `births` | Agents born since the last log row |
 | `deaths` | Agents that died since the last log row |
-| `unique_parent_count` | Number of distinct parents used in the last spawn wave |
-| `genome_diversity_score` | Mean pairwise L2 weight distance across living agents, normalized by expected random distance. 0 = clones, ~1 = as diverse as random init |
+| `unique_parent_count` | Distinct parents used in the last spawn wave |
+| `genome_diversity_score` | Mean pairwise L2 weight distance, normalized. 0 = clones, ~1 = as diverse as random init |
 | `mean_weight_magnitude` | Mean absolute value of all weights in living agents |
 | `weight_std` | Std deviation of all weights in living agents |
-| `mean_pairwise_weight_distance` | Raw (unnormalized) mean L2 distance between genomes |
+| `mean_pairwise_weight_distance` | Raw mean L2 distance between genomes |
 | `food_consumed` | Food eaten since the last log row |
-| `spike_collisions` | Spike hits taken since the last log row |
+| `spike_collisions` | Spike hits since the last log row |
 
 ---
 
 ## Configuration
 
-Everything is in `config.py`.
+Everything is in `config.py`. Nothing else needs to be changed for parameter experiments.
 
 ### World
 | Parameter | Default | Effect |
@@ -210,7 +259,7 @@ Everything is in `config.py`.
 |---|---|---|
 | `SPIKE_COUNT` | 15 | Number of spikes. Repositioned each generation |
 | `SPIKE_RADIUS` | 5 | Collision and visual radius |
-| `SPIKE_ENERGY_DAMAGE` | 25.0 | Energy drained on contact |
+| `SPIKE_ENERGY_DAMAGE` | 25.0 | Energy drained on contact (clamped to 0) |
 | `SPIKE_HIT_COOLDOWN` | 30 | Frames before the same spike can hit the same agent again |
 
 ### Agents
@@ -220,7 +269,7 @@ Everything is in `config.py`.
 | `AGENT_INITIAL_ENERGY` | 80.0 | Energy at spawn |
 | `AGENT_MAX_ENERGY` | 150.0 | Energy cap |
 | `AGENT_ENERGY_DECAY` | 0.05 | Flat energy drain per frame |
-| `AGENT_SPEED_DECAY_COST` | 0.01 | Additional drain per unit of speed. Total decay = `AGENT_ENERGY_DECAY + speed × AGENT_SPEED_DECAY_COST` |
+| `AGENT_SPEED_DECAY_COST` | 0.01 | Extra drain per unit of speed. Total = `AGENT_ENERGY_DECAY + speed × AGENT_SPEED_DECAY_COST` |
 | `AGENT_MAX_AGE` | 3000 | Frames before natural death |
 | `AGENT_MOVE_SPEED_MAX` | 3.5 | Max pixels per frame |
 | `AGENT_TURN_SPEED_MAX` | 0.12 | Max radians per frame |
@@ -229,7 +278,7 @@ Everything is in `config.py`.
 | Parameter | Default | Effect |
 |---|---|---|
 | `VISION_RADIUS` | 150 | How far ahead agents can see |
-| `VISION_FOV` | 2.094 (120°) | Cone width in radians |
+| `VISION_FOV` | 2.094 (120°) | Cone width in radians. Narrower = harder to find things |
 | `SOUND_RADIUS` | 100 | Range for hearing nearby movement |
 | `WALL_SENSOR_RADIUS` | 80 | Distance at which wall sensors start firing |
 
@@ -253,7 +302,7 @@ Weight matrices resize automatically. No other changes needed.
 | Parameter | Default | Effect |
 |---|---|---|
 | `POPULATION_MIN` | 15 | Alive count that triggers a new spawn wave |
-| `SPAWN_BATCH_MAX` | 60 | Max agents per spawn wave. Does not cap live population — agents only arrive in waves, not mid-generation |
+| `SPAWN_BATCH_MAX` | 60 | Max agents per spawn wave. Does not cap live population mid-generation |
 | `MUTATION_RATE` | 0.15 | Per-weight chance of mutation |
 | `MUTATION_STRENGTH` | 0.3 | Std deviation of Gaussian noise on mutated weights |
 | `ELITE_FRACTION` | 0.3 | Top fraction of dead pool eligible as parents |
@@ -267,18 +316,23 @@ Weight matrices resize automatically. No other changes needed.
 | `LOG_INTERVAL` | 500 | Write one CSV row every N frames. `0` = disabled |
 | `CHECKPOINT_INTERVAL` | 50 | Save full population weights every N generations. `0` = disabled |
 
+### Testing
+| Parameter | Default | Effect |
+|---|---|---|
+| `RUN_TESTS_ON_STARTUP` | `False` | Run fast test suites before the sim window opens. Any failure exits before the window opens |
+
 ---
 
 ## Suggested Experiments
 
-**Dangerous world**
+**Dangerous world — pressure to avoid spikes and find scarce food**
 ```python
 SPIKE_COUNT = 35
 SPIKE_ENERGY_DAMAGE = 30.0
 FOOD_COUNT_MAX = 30
 ```
 
-**Reward longevity**
+**Reward longevity over eating**
 ```python
 FITNESS_LIFESPAN_W = 0.7
 FITNESS_FOOD_W = 0.2
@@ -291,7 +345,7 @@ MUTATION_STRENGTH = 0.6
 AGENT_MAX_AGE = 1000
 ```
 
-**Narrow vision**
+**Narrow vision — agents must aim precisely**
 ```python
 VISION_FOV = 0.698   # ~40 degrees
 ```
@@ -320,6 +374,7 @@ evo_sim/
 ├── main.py               — Visual simulation entry point
 ├── fast_train.py         — Headless training entry point
 ├── replay.py             — Load and continue from a checkpoint
+├── run_tests.py          — Test runner with suite selection
 ├── config.py             — All parameters
 │
 ├── simulation/
@@ -328,7 +383,7 @@ evo_sim/
 │   ├── brain.py          — NumPy neural network (variable hidden layers)
 │   ├── sensors.py        — 20-channel sensor system
 │   ├── food.py           — Food spawning and respawning
-│   ├── spikes.py         — Spike hazards, collision, cooldown
+│   ├── spikes.py         — Spike hazards, collision, per-agent cooldown
 │   └── evolution.py      — Fitness, selection, mutation, repopulation
 │
 ├── visualization/
@@ -337,6 +392,15 @@ evo_sim/
 │
 ├── evolog/
 │   └── generation_logger.py  — Frame-interval CSV logging, checkpoints
+│
+├── tests/
+│   ├── conftest.py            — Shared fixtures, fast_config helper
+│   ├── test_brain_evolution.py
+│   ├── test_lifecycle.py
+│   ├── test_sensors_world.py
+│   ├── test_conservation.py
+│   ├── test_determinism.py
+│   └── test_logging.py
 │
 └── utils/
     └── math_utils.py     — angle_diff, clamp, normalize_angle, etc.

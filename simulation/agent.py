@@ -60,7 +60,8 @@ class Agent:
         self.angle = random_direction()
         self.speed = 0.0
 
-        self.energy = AGENT_INITIAL_ENERGY
+        import config as _cfg
+        self.energy = _cfg.AGENT_INITIAL_ENERGY
         self.age = 0
         self.alive = True
 
@@ -124,28 +125,29 @@ class Agent:
         self.x = new_x
         self.y = new_y
 
-        # Energy decay (moving costs a tiny bit more)
-        decay = AGENT_ENERGY_DECAY + self.speed * AGENT_SPEED_DECAY_COST
+        import config as _cfg
+        decay = _cfg.AGENT_ENERGY_DECAY + self.speed * AGENT_SPEED_DECAY_COST
         self.energy -= decay
         self.age += 1
 
-        if self.energy <= 0 or self.age >= AGENT_MAX_AGE:
+        if self.energy <= 0 or self.age >= _cfg.AGENT_MAX_AGE:
             self.alive = False
 
     def eat(self, food):
         """Called when agent overlaps with a food item."""
+        import config as _cfg
         food.alive = False
-        self.energy = min(AGENT_MAX_ENERGY, self.energy + FOOD_ENERGY)
+        self.energy = min(AGENT_MAX_ENERGY, self.energy + _cfg.FOOD_ENERGY)
         self.food_eaten += 1
 
     def fitness(self):
-        from config import FITNESS_LIFESPAN_W, FITNESS_FOOD_W, FITNESS_DISTANCE_W
-        lifespan_score = self.age / AGENT_MAX_AGE
+        import config as _cfg
+        lifespan_score = self.age / _cfg.AGENT_MAX_AGE
         food_score = min(1.0, self.food_eaten / 20.0)
         dist_score = min(1.0, self.distance_traveled / 5000.0)
-        return (FITNESS_LIFESPAN_W * lifespan_score +
-                FITNESS_FOOD_W * food_score +
-                FITNESS_DISTANCE_W * dist_score)
+        return (_cfg.FITNESS_LIFESPAN_W * lifespan_score +
+                _cfg.FITNESS_FOOD_W * food_score +
+                _cfg.FITNESS_DISTANCE_W * dist_score)
 
     # ── Drawing ──────────────────────────────────────────────────────────────
 

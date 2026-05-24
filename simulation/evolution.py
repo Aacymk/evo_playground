@@ -68,6 +68,9 @@ class EvolutionManager:
             spike_mgr.reshuffle()
         forbidden = spike_mgr.positions() if spike_mgr is not None else []
 
+        # Increment generation FIRST so children are tagged to the new generation
+        self.generation += 1
+
         if len(self.dead_pool) == 0:
             new_agents = [
                 Agent(generation=self.generation, forbidden_positions=forbidden)
@@ -78,13 +81,12 @@ class EvolutionManager:
             elite_count = max(1, int(len(sorted_pool) * ELITE_FRACTION))
             parents     = sorted_pool[:elite_count]
 
-            # Track how many distinct parents were used
             parent_ids_used = set()
             new_agents = []
             for _ in range(spawn_count):
                 idx = np.random.randint(len(parents))
                 parent_ids_used.add(idx)
-                parent     = parents[idx]
+                parent      = parents[idx]
                 child_brain = parent['brain'].mutate()
                 child_color = _mutate_color(parent['color'])
                 new_agents.append(Agent(
@@ -94,9 +96,8 @@ class EvolutionManager:
                 ))
             self.last_unique_parents = len(parent_ids_used)
 
-        self.generation += 1
-        self.total_born += len(new_agents)
-        self.gen_births += len(new_agents)
+        self.total_born  += len(new_agents)
+        self.gen_births  += len(new_agents)
         return new_agents
 
     def reset_gen_counters(self):
