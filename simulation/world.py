@@ -79,7 +79,8 @@ class World:
                 and self.evo_mgr.generation % _cfg.CHECKPOINT_INTERVAL == 0):
             self._last_checkpoint_gen = self.evo_mgr.generation
             self.logger.save_checkpoint(self.evo_mgr.generation, self.frame,
-                                        self.evo_mgr.dead_pool)
+                                        self.evo_mgr.dead_pool,
+                                        alive_count=len(self.agents))
 
     # ── Accessors ────────────────────────────────────────────────────────────
 

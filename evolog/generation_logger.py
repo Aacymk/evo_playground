@@ -77,9 +77,9 @@ CSV_COLUMNS = [
 ]
 
 CHECKPOINT_CSV_COLUMNS = [
-    "generation", "frame", "alive_population",
-    "best_alive_fitness", "average_alive_fitness",
-    "current_oldest_alive_age", "genome_diversity_score",
+    "generation", "frame",
+    "best_fitness", "average_fitness",
+    "oldest_agent_age", "genome_diversity_score",
     "weights_file",
 ]
 
@@ -123,10 +123,14 @@ class GenerationLogger:
         best = max(agents, key=lambda a: a.fitness())
         self._save_best_agent(world.frame, best, row)
 
-    def save_checkpoint(self, generation: int, frame: int, dead_pool: list):
+    def save_checkpoint(self, generation: int, frame: int, dead_pool: list,
+                        alive_count: int = 0):
         """
         Called every CHECKPOINT_INTERVAL generations from world.update().
-        Saves the full dead_pool weight set so runs can be resumed.
+        Saves elite dead_pool weights as the gene pool for replay/resume.
+        alive_population is intentionally NOT saved — it is always deterministic
+        from config (POPULATION_MIN + SPAWN_BATCH_MAX) and saving it would be
+        misleading. Replay uses config to determine spawn size.
         """
         if not dead_pool:
             return
@@ -145,26 +149,27 @@ class GenerationLogger:
             weight_data[f"agent{i}_color"]       = np.array(d['color'])
             weight_data[f"agent{i}_fitness"]     = np.array([d['fitness']])
 
-        weight_data['agent_count'] = np.array([len(dead_pool)])
+        # Save pool size so we know how many weight sets are in the file,
+        # but this is the dead pool count, NOT alive_population.
+        weight_data['pool_size']   = np.array([len(dead_pool)])
         weight_data['generation']  = np.array([generation])
         weight_data['frame']       = np.array([frame])
         np.savez(npz_path, **weight_data)
 
-        # Summary row in checkpoints.csv
+        fitnesses = [d['fitness'] for d in dead_pool]
         chk_row = {
             "generation":           generation,
             "frame":                frame,
-            "alive_population":     len(dead_pool),
-            "best_alive_fitness":   round(max(d['fitness'] for d in dead_pool), 4),
-            "average_alive_fitness":round(float(np.mean([d['fitness'] for d in dead_pool])), 4),
-            "current_oldest_alive_age": max(d.get('age', 0) for d in dead_pool),
-            "genome_diversity_score":   round(_genome_diversity(dead_pool), 4),
+            "best_fitness":         round(max(fitnesses), 4),
+            "average_fitness":      round(float(np.mean(fitnesses)), 4),
+            "oldest_agent_age":     max(d.get('age', 0) for d in dead_pool),
+            "genome_diversity_score": round(_genome_diversity(dead_pool), 4),
             "weights_file":         f"checkpoints/{tag}.npz",
         }
         self._append_csv(self.checkpoint_path, CHECKPOINT_CSV_COLUMNS, chk_row)
 
         print(f"[Logger] Checkpoint: gen {generation} → {tag}.npz  "
-              f"({len(dead_pool)} agents, best_fit={chk_row['best_alive_fitness']})")
+              f"(pool={len(dead_pool)}, best_fit={chk_row['best_fitness']})")
 
     # ── Row computation ───────────────────────────────────────────────────────
 

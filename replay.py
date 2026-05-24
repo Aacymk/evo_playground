@@ -59,23 +59,25 @@ def list_checkpoints(run_dir: str):
     print(f"Checkpoints in {run_dir}:")
     for f in files:
         data = np.load(f)
-        gen   = int(data['generation'][0])
-        frame = int(data['frame'][0])
-        count = int(data['agent_count'][0])
-        fitnesses = [float(data[f'agent{i}_fitness'][0]) for i in range(count)]
+        gen       = int(data['generation'][0])
+        frame     = int(data['frame'][0])
+        pool_size = int(data['pool_size'][0])
+        fitnesses = [float(data[f'agent{i}_fitness'][0]) for i in range(pool_size)]
         best_fit  = max(fitnesses)
         print(f"  {os.path.basename(f)}  gen={gen:>6}  frame={frame:>8}  "
-              f"agents={count}  best_fit={best_fit:.4f}")
+              f"pool={pool_size}  best_fit={best_fit:.4f}")
 
 
 def load_checkpoint(npz_path: str):
     """
-    Returns a list of dicts: [{Ws, bs, layer_sizes, color, fitness}, ...]
+    Returns (pool_agents, generation, frame).
+    pool_agents is the saved dead pool — a gene pool for seeding replay.
+    Spawn count is determined by config, not by how many are in this file.
     """
-    data   = np.load(npz_path)
-    count  = int(data['agent_count'][0])
-    agents = []
-    for i in range(count):
+    data      = np.load(npz_path)
+    pool_size = int(data['pool_size'][0])
+    agents    = []
+    for i in range(pool_size):
         num_layers = int(data[f'agent{i}_num_layers'][0])
         Ws = [data[f'agent{i}_W{j}'] for j in range(num_layers)]
         bs = [data[f'agent{i}_b{j}'] for j in range(num_layers)]
@@ -94,14 +96,18 @@ def load_checkpoint(npz_path: str):
 def build_seeded_world(checkpoint_agents, start_gen, logger,
                        mutation_rate_override=None, freeze=False):
     """
-    Create a World whose initial population is seeded from checkpoint weights.
+    Create a World seeded from checkpoint weights.
+
+    The checkpoint contains a dead pool (gene pool), not a live population.
+    We load that pool into evo_mgr.dead_pool, clear the random initial agents,
+    then let maybe_repopulate() spawn the correct number of agents from config
+    (POPULATION_MIN + SPAWN_BATCH_MAX) — exactly as it would mid-run.
     """
     import config
     from simulation.world import World
     from simulation.brain import Brain
     from simulation.agent import Agent
 
-    # Optionally patch mutation rate for this session
     if freeze:
         config.MUTATION_RATE = 0.0
         print("[replay] Mutation disabled — pure exploitation mode")
@@ -111,18 +117,11 @@ def build_seeded_world(checkpoint_agents, start_gen, logger,
 
     world = World(logger=logger)
 
-    # Replace the random initial population with checkpoint agents
+    # Clear the randomly-initialised population
     world.agents.clear()
-    forbidden = world.spike_mgr.positions()
 
-    for ag_data in checkpoint_agents:
-        brain = Brain((ag_data['Ws'], ag_data['bs']))
-        agent = Agent(brain=brain, color=ag_data['color'],
-                      generation=start_gen, forbidden_positions=forbidden)
-        world.agents.append(agent)
-
-    # Seed the evo manager's dead pool with the checkpoint fitness scores
-    # so early repopulation has something to select from
+    # Load checkpoint entries into the dead pool so repopulation has parents
+    world.evo_mgr.dead_pool = []
     for ag_data in checkpoint_agents:
         brain = Brain(([W.copy() for W in ag_data['Ws']],
                        [b.copy() for b in ag_data['bs']]))
@@ -139,9 +138,41 @@ def build_seeded_world(checkpoint_agents, start_gen, logger,
             'action_history':    [],
         })
 
-    world.evo_mgr.generation = start_gen + 1
-    world.evo_mgr.total_born = len(checkpoint_agents)
-    print(f"[replay] Seeded {len(checkpoint_agents)} agents from gen {start_gen}")
+    world.evo_mgr.generation  = start_gen
+    world.evo_mgr.total_born  = 0
+    world.evo_mgr.total_deaths = 0
+
+    # Spawn directly to POPULATION_MIN + SPAWN_BATCH_MAX — the maximum that can
+    # ever be alive simultaneously — using the loaded gene pool as parents.
+    # We don't call maybe_repopulate() because that caps at SPAWN_BATCH_MAX per
+    # call; we want the full starting population in one shot.
+    from config import POPULATION_MIN, SPAWN_BATCH_MAX, ELITE_FRACTION
+    from simulation.brain import Brain as _Brain
+    import numpy as _np
+
+    target      = POPULATION_MIN + SPAWN_BATCH_MAX
+    sorted_pool = sorted(world.evo_mgr.dead_pool,
+                         key=lambda d: d['fitness'], reverse=True)
+    elite_count = max(1, int(len(sorted_pool) * ELITE_FRACTION))
+    parents     = sorted_pool[:elite_count]
+    forbidden   = world.spike_mgr.positions()
+
+    new_agents = []
+    for _ in range(target):
+        parent      = parents[_np.random.randint(len(parents))]
+        child_brain = parent['brain'].mutate()
+        child_color = parent['color']
+        new_agents.append(Agent(brain=child_brain, color=child_color,
+                                generation=start_gen + 1,
+                                forbidden_positions=forbidden))
+
+    world.agents.extend(new_agents)
+    world.evo_mgr.generation  = start_gen + 1
+    world.evo_mgr.total_born  = len(new_agents)
+
+    print(f"[replay] Seeded from gen {start_gen} pool ({len(checkpoint_agents)} genomes) "
+          f"→ spawned {len(new_agents)} agents (config: "
+          f"POPULATION_MIN={config.POPULATION_MIN} + SPAWN_BATCH_MAX={config.SPAWN_BATCH_MAX})")
     return world
 
 

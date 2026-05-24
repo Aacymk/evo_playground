@@ -1,0 +1,28 @@
+{
+  "frame": 747000,
+  "fitness": 0.9255,
+  "age": 2441,
+  "food_eaten": 24,
+  "spike_hits": 3,
+  "distance_traveled": 7786.2,
+  "color": [
+    254,
+    107,
+    44
+  ],
+  "action_summary": {
+    "samples": 245,
+    "mean_turn": -0.4142,
+    "std_turn": 0.4726,
+    "mean_speed": 0.8285,
+    "std_speed": 0.1276,
+    "archetype": "consistent_left_turner"
+  },
+  "snapshot_stats": {
+    "generation": 566,
+    "alive_population": 18,
+    "average_alive_fitness": 0.6152,
+    "best_alive_fitness": 0.9255,
+    "behavioral_diversity_score": 0.1617
+  }
+}

@@ -59,7 +59,12 @@ class EvolutionManager:
         if len(agents) >= POPULATION_MIN:
             return []
 
-        spawn_count = min(POPULATION_MIN - len(agents) + 5, SPAWN_BATCH_MAX)
+        # Spawn exactly enough to bring alive count up to POPULATION_MIN + SPAWN_BATCH_MAX.
+        # No overshoot: the target ceiling is the only hard limit.
+        # This also prevents multi-frame re-firing from accumulating extra batches —
+        # once the first wave lands, alive >= POPULATION_MIN and the guard above exits.
+        target      = POPULATION_MIN + SPAWN_BATCH_MAX
+        spawn_count = min(target - len(agents), SPAWN_BATCH_MAX)
         if spawn_count <= 0:
             return []
 

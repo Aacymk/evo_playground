@@ -75,7 +75,7 @@ FITNESS_DISTANCE_W = 0.1
 # ====================
 # TESTING
 # ====================
-RUN_TESTS_ON_STARTUP = True  # Set True to run the fast sanity checks before
+RUN_TESTS_ON_STARTUP = False  # Set True to run the fast sanity checks before
                                # the sim window opens. Catches regressions without
                                # needing to run pytest manually.
                                # Full suite: python -m pytest tests/ -v

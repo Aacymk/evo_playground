@@ -185,8 +185,8 @@ def test_checkpoint_npz_loads_correctly():
         assert chk_files, "No checkpoint files written"
 
         data = np.load(chk_files[-1])
-        n = int(data['agent_count'][0])
-        assert n > 0, "Checkpoint has 0 agents"
+        n = int(data['pool_size'][0])
+        assert n > 0, "Checkpoint has 0 agents in pool"
 
         for i in range(min(n, 5)):  # check first 5
             num_layers = int(data[f'agent{i}_num_layers'][0])
