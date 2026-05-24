@@ -87,6 +87,12 @@ HEADLESS_UPDATES_PER_TICK = 10  # Simulation steps per frame in fast-train mode
 # ====================
 LOG_INTERVAL = 500           # Write one CSV row every N frames (0 = disabled)
 CHECKPOINT_INTERVAL = 50     # Save full population weights every N generations (0 = disabled)
+FITNESS_MIN_AGE = 200        # Minimum agent age (frames) to be included in fitness
+                             # percentile calculations. Agents younger than this are
+                             # excluded because their fitness is near-zero by definition
+                             # (haven't had time to eat or travel). Does not affect
+                             # average_alive_fitness or best_alive_fitness, which always
+                             # include the full population.
 ENERGY_BAR_WIDTH = 20
 ENERGY_BAR_HEIGHT = 4
 ENERGY_BAR_OFFSET = 12       # Pixels above agent center

@@ -160,7 +160,12 @@ def test_all_sensor_values_in_expected_ranges():
 
 
 def test_agents_stay_within_bounds():
-    """Agents should never leave the world bounds after a wall bounce."""
+    """
+    Agent centers must stay at least AGENT_RADIUS pixels from each wall,
+    meaning the full body is always inside the arena. The bounce logic in
+    agent.py clamps to exactly this boundary, so this test verifies the
+    actual intended invariant rather than the looser 0..WORLD_WIDTH check.
+    """
     from config import WORLD_WIDTH, WORLD_HEIGHT, AGENT_RADIUS
     seed(0)
 
@@ -170,10 +175,22 @@ def test_agents_stay_within_bounds():
     for frame in range(1000):
         world.update()
         for agent in world.agents:
-            assert agent.x >= 0, f"Frame {frame}: agent x={agent.x} < 0"
-            assert agent.x <= WORLD_WIDTH, f"Frame {frame}: agent x={agent.x} > {WORLD_WIDTH}"
-            assert agent.y >= 0, f"Frame {frame}: agent y={agent.y} < 0"
-            assert agent.y <= WORLD_HEIGHT, f"Frame {frame}: agent y={agent.y} > {WORLD_HEIGHT}"
+            assert agent.x >= AGENT_RADIUS, (
+                f"Frame {frame}: agent x={agent.x:.2f} < AGENT_RADIUS={AGENT_RADIUS} "
+                f"(body exits left wall)"
+            )
+            assert agent.x <= WORLD_WIDTH - AGENT_RADIUS, (
+                f"Frame {frame}: agent x={agent.x:.2f} > {WORLD_WIDTH - AGENT_RADIUS} "
+                f"(body exits right wall)"
+            )
+            assert agent.y >= AGENT_RADIUS, (
+                f"Frame {frame}: agent y={agent.y:.2f} < AGENT_RADIUS={AGENT_RADIUS} "
+                f"(body exits top wall)"
+            )
+            assert agent.y <= WORLD_HEIGHT - AGENT_RADIUS, (
+                f"Frame {frame}: agent y={agent.y:.2f} > {WORLD_HEIGHT - AGENT_RADIUS} "
+                f"(body exits bottom wall)"
+            )
 
 
 def test_safe_spawn_avoids_spikes():

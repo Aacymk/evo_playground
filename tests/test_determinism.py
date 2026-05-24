@@ -3,16 +3,26 @@ tests/test_determinism.py
 
 Seeded reproducibility tests. Two runs with the same numpy seed must produce
 identical results. Uses fast_config so generations complete quickly.
+
+Both numpy.random AND Python's built-in random module are seeded everywhere
+to guarantee full determinism regardless of which RNG any module uses internally.
 """
 
-import sys, os
+import sys, os, random
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tests.conftest import make_world, fast_config, restore_config
 import numpy as np
 
 
+def _seed_all(n):
+    """Seed both numpy.random and Python's built-in random module."""
+    np.random.seed(n)
+    random.seed(n)
+
+
 def _snapshot(world):
     agents = sorted(world.agents, key=lambda a: a.id)
+    fits   = [round(a.fitness(), 4) for a in agents]
     return {
         "generation":   world.evo_mgr.generation,
         "total_born":   world.evo_mgr.total_born,
@@ -21,12 +31,14 @@ def _snapshot(world):
         "positions":    [(round(a.x, 3), round(a.y, 3)) for a in agents],
         "energies":     [round(a.energy, 3) for a in agents],
         "ages":         [a.age for a in agents],
+        "fitnesses":    fits,
+        "avg_fitness":  round(float(np.mean(fits)), 4) if fits else 0.0,
     }
 
 
 def _run(frames, rng_seed):
     orig = fast_config()
-    np.random.seed(rng_seed)
+    _seed_all(rng_seed)
     world = make_world()
     for _ in range(frames):
         world.update()
@@ -47,24 +59,81 @@ def test_identical_seeds_identical_output():
 
 
 def test_different_seeds_different_output():
-    """Different seeds → different positions (if seed is actually used)."""
+    """
+    Different seeds must produce meaningfully different simulations —
+    not just floating-point noise. We check multiple population-level
+    metrics so the test can't pass trivially.
+    """
     snap_0 = _run(300, rng_seed=0)
     snap_1 = _run(300, rng_seed=999)
-    assert snap_0["positions"] != snap_1["positions"], (
-        "Different seeds produced identical positions — seeding may be broken"
+
+    # Count how many top-level metrics diverge
+    diverged = []
+    for key in ["generation", "total_born", "total_deaths", "positions",
+                "energies", "avg_fitness"]:
+        if snap_0[key] != snap_1[key]:
+            diverged.append(key)
+
+    assert len(diverged) >= 2, (
+        f"Expected at least 2 metrics to diverge between seeds, only got: {diverged}.\n"
+        f"Seed 0: gen={snap_0['generation']} born={snap_0['total_born']} "
+        f"avg_fit={snap_0['avg_fitness']}\n"
+        f"Seed 999: gen={snap_1['generation']} born={snap_1['total_born']} "
+        f"avg_fit={snap_1['avg_fitness']}"
     )
-    print("  Different seeds diverge ✓")
+    print(f"  Different seeds diverge on {len(diverged)} metrics: {diverged} ✓")
+
+
+def test_simulation_uses_only_numpy_random():
+    """
+    Guard test: verify that no simulation module imports Python's built-in
+    'random' module. All randomness should come from numpy.random so that
+    seeding np.random is sufficient to control all stochasticity.
+    """
+    import ast
+    import os
+
+    sim_dirs = ["simulation", "evolog", "utils"]
+    violations = []
+
+    for dirname in sim_dirs:
+        dirpath = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               dirname)
+        if not os.path.isdir(dirpath):
+            continue
+        for fname in os.listdir(dirpath):
+            if not fname.endswith(".py"):
+                continue
+            fpath = os.path.join(dirpath, fname)
+            tree  = ast.parse(open(fpath).read())
+            for node in ast.walk(tree):
+                # Flag: import random  OR  from random import ...
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name == "random":
+                            violations.append(f"{dirname}/{fname}: import random")
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module == "random":
+                        violations.append(f"{dirname}/{fname}: from random import ...")
+
+    assert not violations, (
+        "Simulation modules use Python's built-in random module — "
+        "seed np.random AND random.seed() to guarantee determinism, "
+        "or switch to np.random exclusively.\n"
+        "Violations:\n  " + "\n  ".join(violations)
+    )
+    print("  No simulation modules import built-in random ✓")
 
 
 def test_mutation_deterministic_with_seed():
     """Two brains mutated with same seed produce identical weights."""
     from simulation.brain import Brain
-    np.random.seed(1)
+    _seed_all(1)
     brain = Brain()
 
-    np.random.seed(99)
+    _seed_all(99)
     ma = brain.mutate()
-    np.random.seed(99)
+    _seed_all(99)
     mb = brain.mutate()
 
     Ws_a, bs_a = ma.get_weights()
@@ -81,7 +150,7 @@ def test_multiple_generations_reproducible():
     """
     def collect_gen_milestones(rng_seed):
         orig = fast_config()
-        np.random.seed(rng_seed)
+        _seed_all(rng_seed)
         world = make_world()
         milestones = []
         last_gen = world.evo_mgr.generation
@@ -108,14 +177,14 @@ def test_sensor_output_deterministic():
     from simulation.food import Food
     from tests.conftest import make_agent
 
-    np.random.seed(5)
+    _seed_all(5)
     agent = make_agent(x=400, y=300)
     agent.angle = 0.0
     food_list = [Food(x=500, y=300)]
 
-    np.random.seed(10)
+    _seed_all(10)
     s1 = compute_sensors(agent, food_list, [agent])
-    np.random.seed(10)
+    _seed_all(10)
     s2 = compute_sensors(agent, food_list, [agent])
 
     np.testing.assert_array_almost_equal(s1, s2, decimal=6)
@@ -126,6 +195,7 @@ if __name__ == "__main__":
     print("Running determinism tests...")
     test_identical_seeds_identical_output()
     test_different_seeds_different_output()
+    test_simulation_uses_only_numpy_random()
     test_mutation_deterministic_with_seed()
     test_multiple_generations_reproducible()
     test_sensor_output_deterministic()

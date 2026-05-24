@@ -40,11 +40,14 @@ CSV_COLUMNS = [
     # ── Fitness of living agents ──────────────────────────────────────────────
     "average_alive_fitness",
     "best_alive_fitness",
+    "fitness_std",
+    # ── Fitness of mature agents only (age >= FITNESS_MIN_AGE) ───────────────
+    "mature_agent_count",
+    "mature_average_fitness",
     "fitness_10th_percentile",
     "fitness_50th_percentile",
     "fitness_75th_percentile",
     "fitness_90th_percentile",
-    "fitness_std",
     # ── Behavioral metrics ────────────────────────────────────────────────────
     "behavioral_diversity_score",
     "action_entropy",
@@ -170,8 +173,25 @@ class GenerationLogger:
         ages = [a.age for a in agents]
 
         # ── Fitness of LIVING agents ──────────────────────────────────────────
-        fits = [a.fitness() for a in agents]
+        # Full population — used for average and best (always complete picture)
+        fits     = [a.fitness() for a in agents]
         fits_arr = np.array(fits)
+
+        # Mature agents only — used for percentiles so freshly-spawned agents
+        # (whose fitness is near-zero by construction) don't drag every
+        # percentile to zero after a repopulation wave.
+        from config import FITNESS_MIN_AGE
+        mature   = [a for a in agents if a.age >= FITNESS_MIN_AGE]
+        if mature:
+            mature_fits = np.array([a.fitness() for a in mature])
+            p10  = round(float(np.percentile(mature_fits, 10)),  4)
+            p50  = round(float(np.percentile(mature_fits, 50)),  4)
+            p75  = round(float(np.percentile(mature_fits, 75)),  4)
+            p90  = round(float(np.percentile(mature_fits, 90)),  4)
+            mavg = round(float(np.mean(mature_fits)), 4)
+        else:
+            # No mature agents in this snapshot (e.g. very early in a run)
+            p10 = p50 = p75 = p90 = mavg = None
 
         # ── Action outputs ────────────────────────────────────────────────────
         # Use mean action history vector per agent (sampled during their life)
@@ -217,11 +237,13 @@ class GenerationLogger:
             "median_alive_age":          round(float(np.median(ages)), 1),
             "average_alive_fitness":     round(float(np.mean(fits_arr)), 4),
             "best_alive_fitness":        round(float(np.max(fits_arr)), 4),
-            "fitness_10th_percentile":   round(float(np.percentile(fits_arr, 10)), 4),
-            "fitness_50th_percentile":   round(float(np.percentile(fits_arr, 50)), 4),
-            "fitness_75th_percentile":   round(float(np.percentile(fits_arr, 75)), 4),
-            "fitness_90th_percentile":   round(float(np.percentile(fits_arr, 90)), 4),
             "fitness_std":               round(float(np.std(fits_arr)), 4),
+            "mature_agent_count":        len(mature),
+            "mature_average_fitness":    mavg,
+            "fitness_10th_percentile":   p10,
+            "fitness_50th_percentile":   p50,
+            "fitness_75th_percentile":   p75,
+            "fitness_90th_percentile":   p90,
             "behavioral_diversity_score":round(beh_div, 4),
             "action_entropy":            round(entropy, 4),
             "mean_turn_output":          round(float(np.mean(turn_arr)), 4),

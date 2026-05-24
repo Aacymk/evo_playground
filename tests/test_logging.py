@@ -88,9 +88,10 @@ def test_log_interval_respected():
 
 
 def test_fitness_values_in_range():
-    """All fitness columns should be in [0, 1]."""
+    """All fitness columns should be in [0, 1] when present (mature cols may be None)."""
     fitness_cols = [
         'average_alive_fitness', 'best_alive_fitness',
+        'mature_average_fitness',
         'fitness_10th_percentile', 'fitness_50th_percentile',
         'fitness_75th_percentile', 'fitness_90th_percentile',
     ]
@@ -99,7 +100,10 @@ def test_fitness_values_in_range():
         rows = list(csv.DictReader(open(logger.csv_path)))
         for row in rows:
             for col in fitness_cols:
-                val = float(row[col])
+                raw = row[col]
+                if raw == '' or raw is None:
+                    continue   # mature columns are None when no mature agents exist
+                val = float(raw)
                 assert 0.0 <= val <= 1.0, (
                     f"Frame {row['frame']}: {col}={val} out of [0, 1]"
                 )
@@ -116,6 +120,12 @@ def test_best_fitness_gte_average():
             assert best >= avg - 1e-6, (
                 f"Frame {row['frame']}: best_fitness {best} < avg_fitness {avg}"
             )
+            # mature_average_fitness should also be <= best when present
+            if row['mature_average_fitness'] not in ('', None):
+                mavg = float(row['mature_average_fitness'])
+                assert best >= mavg - 1e-6, (
+                    f"Frame {row['frame']}: best_fitness {best} < mature_avg {mavg}"
+                )
 
 
 def test_archetype_percentages_sum_to_one():

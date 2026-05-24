@@ -1,0 +1,2 @@
+generation,frame,alive_population,best_alive_fitness,average_alive_fitness,current_oldest_alive_age,genome_diversity_score,weights_file
+50,52081,194,1.0,0.899,3000,0.63,checkpoints/chk_000050.npz

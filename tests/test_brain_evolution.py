@@ -77,8 +77,17 @@ def test_brain_clone_is_independent():
 
 
 def test_brain_mutate_produces_different_weights():
-    """Mutated brain should differ from parent in at least some weights."""
+    """
+    Mutated brain must differ from parent. MUTATION_RATE is forced to 1.0
+    so every weight is guaranteed to be touched — eliminating the probabilistic
+    flakiness of testing at the default 0.15 rate.
+    """
+    import config
     from simulation.brain import Brain
+
+    orig_rate = config.MUTATION_RATE
+    config.MUTATION_RATE = 1.0   # every weight mutated, no randomness about whether it fires
+
     seed(0)
     brain   = Brain()
     mutated = brain.mutate()
@@ -86,8 +95,11 @@ def test_brain_mutate_produces_different_weights():
     Ws_p, bs_p = brain.get_weights()
     Ws_m, bs_m = mutated.get_weights()
 
+    # With rate=1.0 every weight was mutated — none should be identical
     all_same = all(np.allclose(W_p, W_m) for W_p, W_m in zip(Ws_p, Ws_m))
-    assert not all_same, "Mutated brain has identical weights to parent"
+    assert not all_same, "Mutated brain has identical weights to parent even at MUTATION_RATE=1.0"
+
+    config.MUTATION_RATE = orig_rate
 
 
 def test_brain_variable_hidden_layers():
@@ -198,43 +210,65 @@ def test_children_get_incremented_generation():
 
 def test_only_elite_used_as_parents():
     """
-    With ELITE_FRACTION, only the top performers should ever be selected.
-    We verify this by giving high fitness to a known subset and checking
-    that children's weights cluster around those parents.
+    Verifies that maybe_repopulate() samples parents exclusively from the
+    elite subset, not from the full dead pool.
+
+    Strategy: give elite agents a distinctive first-layer weight signature
+    (all weights = +5.0) and non-elite agents the opposite (-5.0). After
+    repopulation, every child must have first-layer weights closer to +5
+    than to -5, even after mutation noise is applied.
     """
+    import config
     from simulation.evolution import EvolutionManager
     from simulation.brain import Brain
-    from config import POPULATION_MIN, ELITE_FRACTION
+    from config import POPULATION_MIN
+
     seed(0)
+
+    # Force mutation rate=0 so children's weights are exact parent copies,
+    # making the signature check unambiguous.
+    orig_rate = config.MUTATION_RATE
+    config.MUTATION_RATE = 0.0
 
     evo = EvolutionManager()
 
-    # Create 10 low-fitness and 10 high-fitness agents
-    low_agents  = make_agents(10, generation=1)
-    high_agents = make_agents(10, generation=1)
+    def make_brain_with_signature(value):
+        """Return a brain whose W0 is filled with `value`."""
+        b = Brain()
+        Ws, bs = b.get_weights()
+        Ws[0][:] = value
+        return Brain((Ws, bs))
 
-    for ag in low_agents:
+    ELITE_SIG   =  5.0   # unmistakable positive signature
+    NONELITE_SIG = -5.0  # unmistakable negative signature
+
+    # Non-elite: low fitness, negative signature
+    for ag in make_agents(10, generation=1):
         ag.age = 10; ag.food_eaten = 0
+        ag.brain = make_brain_with_signature(NONELITE_SIG)
         evo.record_death(ag)
 
-    for ag in high_agents:
+    # Elite: high fitness, positive signature
+    for ag in make_agents(10, generation=1):
         ag.age = 3000; ag.food_eaten = 20
+        ag.brain = make_brain_with_signature(ELITE_SIG)
         evo.record_death(ag)
 
-    high_fitnesses = sorted([ag.fitness() for ag in high_agents], reverse=True)
-    pool_fitnesses = sorted([d['fitness'] for d in evo.dead_pool], reverse=True)
+    alive = make_agents(POPULATION_MIN - 5, generation=1)
+    children = evo.maybe_repopulate(alive)
 
-    elite_count = max(1, int(len(evo.dead_pool) * ELITE_FRACTION))
-    elite_fitnesses = pool_fitnesses[:elite_count]
+    assert len(children) > 0, "No children were spawned"
 
-    # All elite should be high performers
-    min_elite = min(elite_fitnesses)
-    max_low   = max(ag.fitness() for ag in low_agents)
-    assert min_elite > max_low, (
-        f"Elite pool contains low-fitness agents: min_elite={min_elite:.4f}, "
-        f"max_low={max_low:.4f}"
-    )
-    print(f"  Elite selection correct: min_elite={min_elite:.3f} > max_low={max_low:.3f} ✓")
+    for i, child in enumerate(children):
+        Ws, _ = child.brain.get_weights()
+        w0_mean = float(np.mean(Ws[0]))
+        assert w0_mean > 0, (
+            f"Child {i} W0 mean={w0_mean:.3f} — suggests non-elite parent "
+            f"(elite signature={ELITE_SIG}, non-elite={NONELITE_SIG})"
+        )
+
+    config.MUTATION_RATE = orig_rate
+    print(f"  Elite-only parent selection verified across {len(children)} children ✓")
 
 
 # ── Fitness tests ─────────────────────────────────────────────────────────────
